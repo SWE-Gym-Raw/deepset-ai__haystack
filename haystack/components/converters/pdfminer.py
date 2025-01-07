@@ -5,7 +5,7 @@
 import io
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Iterator, List, Optional, Union
 
 from haystack import Document, component, logging
 from haystack.components.converters.utils import get_bytestream_from_source, normalize_metadata
@@ -14,7 +14,7 @@ from haystack.lazy_imports import LazyImport
 
 with LazyImport("Run 'pip install pdfminer.six'") as pdfminer_import:
     from pdfminer.high_level import extract_pages
-    from pdfminer.layout import LAParams, LTTextContainer
+    from pdfminer.layout import LAParams, LTPage, LTTextContainer
 
 logger = logging.getLogger(__name__)
 
@@ -98,23 +98,27 @@ class PDFMinerToDocument:
         )
         self.store_full_path = store_full_path
 
-    def _converter(self, extractor) -> Document:
+    @staticmethod
+    def _converter(lt_page_objs: Iterator[LTPage]) -> Document:
         """
         Extracts text from PDF pages then convert the text into Documents
 
-        :param extractor:
+        :param lt_page_objs:
             Python generator that yields PDF pages.
 
         :returns:
             PDF text converted to Haystack Document
         """
         pages = []
-        for page in extractor:
+        for page in lt_page_objs:
             text = ""
             for container in page:
                 # Keep text only
                 if isinstance(container, LTTextContainer):
-                    text += container.get_text()
+                    container_text = container.get_text()
+                    if text:
+                        text += "\n"
+                    text += container_text
             pages.append(text)
 
         # Add a page delimiter
